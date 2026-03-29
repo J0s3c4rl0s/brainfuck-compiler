@@ -14,10 +14,8 @@ Henceforth "cell value" is the value of the cell at the current pointer.
 - `+`/`-` increment/decrement current cell-value (Value may (or may not) loop)
 -  `>`/`<` move pointer left/right (undefined behaviour if at relevant border)
 - `[` Check cell value: 
-    - If zero: control continues 
-    - Else: Skip to next matching `]` (N.B. Beware nesting)
+    - If zero: Skip to next matching `]` (N.B. Beware nesting)
 - `]` Check vell value : 
-    - If nonzero: continue 
-    - Else: Skip to next matching `]`
+    - If nonzero: Return to previous matching `]`
 - `.` Output cell value (print, define for environment)
 - `,` Read one byte input, overwrite current cell value
