@@ -1,7 +1,7 @@
-pub mod interpreter;
+pub mod token_interpreter;
 pub mod utils;
+pub mod interpreter;
 
-use interpreter::{Op, Interpreter};
 
 fn main() {
     // test_echo();
