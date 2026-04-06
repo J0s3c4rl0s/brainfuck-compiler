@@ -106,7 +106,7 @@ fn parse_block(mut tokens: &[Token]) -> (Vec<Op>, &[Token]) {
     (ops, tokens)
 }
 
-fn parse(tokens: &[Token]) -> Vec<Op> {
+pub fn parse(tokens: &[Token]) -> Vec<Op> {
     let (ops, _) = parse_block(tokens);
     ops
 }
