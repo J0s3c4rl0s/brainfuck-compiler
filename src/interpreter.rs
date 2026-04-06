@@ -1,60 +1,34 @@
 use std::io::{Read, Write};
 
+use crate::utils::Token;
 
-#[derive(Clone, Copy, Debug)]
-pub enum Op {
-    Inc, // +
-    Dec, // -
-    Left, // < 
-    Right, // >
-    LeftBracket, // [
-    RightBracket, // ]
-    Print, // .
-    Read, // ,
-}
-
-pub fn lex(program: &str) -> Vec<Op> {
-    program.chars().filter_map(|c| {
-        match c {
-            '+' => Some(Op::Inc),
-            '-' => Some(Op::Dec),
-            '<' => Some(Op::Left),
-            '>' => Some(Op::Right),
-            '[' => Some(Op::LeftBracket),
-            ']' => Some(Op::RightBracket),
-            '.' => Some(Op::Print),
-            ',' => Some(Op::Read),
-            _ => None, // ignore everything else
-        }
-    }).collect()
-}
-
-// Internal memory model for the interpreter
-// Want to compare interpreter to different compilers so lets be mildly efficient
 pub struct Interpreter<R: Read, W: Write> {
+    // IO
     input : R,
     output: W,
+    // Memory
     cells : Vec<u8>,
-    instruction_pointer : usize, 
     cell_pointer : usize,
-    program : Vec<Op>,
+    // Control flow
+    program : Vec<Token>,
+    instruction_pointer : usize, 
 }
 
 impl<R: Read, W: Write> Interpreter<R, W> {
-    pub fn new(input: R, output: W, program: Vec<Op>) -> Self {
+    pub fn new(input: R, output: W, program: Vec<Token>) -> Self {
         Self { input, output, cells: vec![0; 30000], instruction_pointer: 0, cell_pointer: 0, program }
     }
      
     pub fn run(mut self) -> W{
         while self.instruction_pointer < self.program.len() {
-            self.handle_op();
+            self.handle_token();
             self.instruction_pointer += 1;
         }
         self.output
     }
 
 
-    fn read_op(&self) -> Op {
+    fn read_token(&self) -> Token {
         // Panic if there is no instruction
         if self.instruction_pointer >= self.program.len() {
             panic!("Instruction pointer OOB");
@@ -64,18 +38,18 @@ impl<R: Read, W: Write> Interpreter<R, W> {
     }
 
     // Function for executing one command
-    fn handle_op(&mut self) {
-        let op = self.read_op();
-        //println!("Handling operation: {:?}", op);
-        match op {
-            Op::Inc => self.increment_cell(),
-            Op::Dec => self.decrement_cell(),
-            Op::Left => self.left(),
-            Op::Right => self.right(),
-            Op::LeftBracket => self.cond_left_bracket(),
-            Op::RightBracket => self.cond_right_bracket(),
-            Op::Print => self.print(),
-            Op::Read => self.read(),
+    fn handle_token(&mut self) {
+        let token = self.read_token();
+        //println!("Handling tokeneration: {:?}", token);
+        match token {
+            Token::Inc => self.increment_cell(),
+            Token::Dec => self.decrement_cell(),
+            Token::Left => self.left(),
+            Token::Right => self.right(),
+            Token::LeftBracket => self.cond_left_bracket(),
+            Token::RightBracket => self.cond_right_bracket(),
+            Token::Print => self.print(),
+            Token::Read => self.read(),
         }
     }
 
@@ -108,21 +82,18 @@ impl<R: Read, W: Write> Interpreter<R, W> {
 
             self.skip_to_next_right();
         }
-        else {
-            // self.instruction_pointer += 1;
-        }
     }
     
     fn skip_to_next_right(&mut self){
         self.instruction_pointer += 1;
-        match self.read_op() {
+        match self.read_token() {
             // Move to next right, and then the one after
-            Op::LeftBracket => {
+            Token::LeftBracket => {
                 self.skip_to_next_right();
                 self.skip_to_next_right();
             }, 
             // Done! 
-            Op::RightBracket => return, 
+            Token::RightBracket => return, 
             // Move on to next character
             _ => {
                 self.skip_to_next_right();
@@ -136,21 +107,18 @@ impl<R: Read, W: Write> Interpreter<R, W> {
         if ret {
             self.return_to_last_left();
         } 
-        else {
-            // self.instruction_pointer += 1;
-        }
     }
     
     fn return_to_last_left(&mut self) {
         self.instruction_pointer -= 1;
-        match self.read_op() {
+        match self.read_token() {
             // Move to prev left, and then the one before
-            Op::RightBracket  => {
+            Token::RightBracket  => {
                 self.return_to_last_left();
                 self.return_to_last_left();
             }, 
             // Done! 
-            Op::LeftBracket => return, 
+            Token::LeftBracket => return, 
             // Move on to prev character
             _ => {
                 self.return_to_last_left();
@@ -180,12 +148,11 @@ impl<R: Read, W: Write> Interpreter<R, W> {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
-    use crate::interpreter::*;
+    use crate::{interpreter::*, utils::lex};
 
     fn test_program(program_str: &str, input_str: &[u8], output_str: &[u8],) {
         let program = lex(program_str);
 
-        // Input: "abc"
         let input = Cursor::new(input_str);
         let output = Cursor::new(Vec::new());
 
@@ -204,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn test_loop() {
+    fn test_lotoken() {
         test_program(
             "++[>++[>.+<-]<-]", 
             b"", 
@@ -238,9 +205,4 @@ mod tests {
             b"", 
             b"H\n");
     }
-
-    // #[should_panic]
-    // #[test]
-    // fn test_unmatched() {
-    // }
 }
