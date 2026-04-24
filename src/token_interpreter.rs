@@ -1,6 +1,6 @@
-use std::io::{Read, Write};
+use std::io::{Error, Read, Write};
 
-use crate::utils::Token;
+use crate::{error::{InterpreterError, ParseError, RuntimeError}, utils::Token};
 
 pub struct TokenInterpreter<R: Read, W: Write> {
     // IO
@@ -19,31 +19,47 @@ impl<R: Read, W: Write> TokenInterpreter<R, W> {
         Self { input, output, cells: vec![0; 30000], instruction_pointer: 0, cell_pointer: 0, program }
     }
      
-    pub fn run(mut self) -> W{
+    pub fn run(mut self) -> Result<W, InterpreterError>{
         while self.instruction_pointer < self.program.len() {
-            self.handle_token();
+            self.handle_token()?;
             self.instruction_pointer += 1;
         }
-        self.output
+        Ok(self.output)
     }
 
 
-    fn read_token(&self) -> Token {
+    fn read_token(&self) -> Result<Token, InterpreterError> {
         // Panic if there is no instruction
         if self.instruction_pointer >= self.program.len() {
             panic!("Instruction pointer OOB");
         }
 
-        self.program[self.instruction_pointer]
+        Ok(self.program[self.instruction_pointer])
     }
 
     // Function for executing one command
-    fn handle_token(&mut self) {
-        let token = self.read_token();
-        //println!("Handling tokeneration: {:?}", token);
+    fn handle_token(&mut self) -> Result<(), InterpreterError> {
+        let token = self.read_token()?;
         match token {
-            Token::Inc => self.cells[self.cell_pointer] += 1,
-            Token::Dec => self.cells[self.cell_pointer] -= 1,
+            // Either inline other function calls or make helper methods for these as well
+            Token::Inc => {
+                let curr_cell_value = self.cells[self.cell_pointer];
+                if curr_cell_value == u8::MAX {
+                    return Err(InterpreterError::Runtime(RuntimeError::IntegerOverflow { pos: self.instruction_pointer, left: curr_cell_value, right: 1 }));
+                }
+
+                self.cells[self.cell_pointer] = curr_cell_value + 1;
+                Ok(())
+            },
+            Token::Dec => {
+                let curr_cell_value = self.cells[self.cell_pointer];
+                if curr_cell_value == u8::MIN {
+                    return Err(InterpreterError::Runtime(RuntimeError::IntegerUnderflow { pos: self.instruction_pointer, left: curr_cell_value, right: 1 }));
+                }
+                
+                self.cells[self.cell_pointer] = curr_cell_value - 1;
+                Ok(())
+            },
             Token::Left => self.left(),
             Token::Right => self.right(),
             Token::LeftBracket => self.cond_left_bracket(),
@@ -53,86 +69,109 @@ impl<R: Read, W: Write> TokenInterpreter<R, W> {
         }
     }
 
-    fn left(&mut self) {
+    fn left(&mut self) -> Result<(), InterpreterError> {
         if self.cell_pointer == 0 {
-            panic!("Memory pointer is already 0");
+            return Err(InterpreterError::Runtime(RuntimeError::PointerOutOfBounds { pos: self.instruction_pointer, index: -1 }))
         }
         self.cell_pointer -= 1;
+        Ok(())
     }
     
-    fn right(&mut self) {
+    fn right(&mut self) -> Result<(), InterpreterError> {
         if self.cell_pointer >= 300000 {
-            panic!("Memory pointer is already 30000");
+            return Err(InterpreterError::Runtime(RuntimeError::PointerOutOfBounds { pos: self.instruction_pointer, index:  300001}));
         }
         self.cell_pointer += 1;
+        Ok(())
     }
     
-    fn cond_left_bracket(&mut self) {
+    fn cond_left_bracket(&mut self) -> Result<(), InterpreterError> {
         let skip = self.cells[self.cell_pointer] == 0;
-        //println!("{skip}");
         if skip {
-            self.skip_to_next_right();
+            self.skip_to_next_right(self.instruction_pointer)
+        } else {
+            Ok(())
         }
     }
     
-    fn skip_to_next_right(&mut self){
+    // Rewrite to use a stack for better clarity?
+    fn skip_to_next_right(&mut self, left_bracket_pos: usize) -> Result<(), InterpreterError> {
         self.instruction_pointer += 1;
         match self.read_token() {
-            // Move to next right, and then the one after
-            Token::LeftBracket => {
-                self.skip_to_next_right();
-                self.skip_to_next_right();
-            }, 
-            // Done! 
-            Token::RightBracket => return, 
-            // Move on to next character
-            _ => {
-                self.skip_to_next_right();
+                Ok(token) => match token {
+                // Move to next right, and then the one after
+                Token::LeftBracket => {
+                    self.skip_to_next_right(self.instruction_pointer)?;
+                    self.skip_to_next_right(left_bracket_pos)
+                }, 
+                // Done! 
+                Token::RightBracket => return Ok(()), 
+                // Move on to next character
+                _ => {
+                    self.skip_to_next_right(left_bracket_pos)
+                },
             },
+            // If we have run out of characters we have an unmatched bracket
+            Err(_err) => Err(InterpreterError::Parser(ParseError::UnmatchedOpenBracket { pos: left_bracket_pos })),
         }
     }
     
-    fn cond_right_bracket(&mut self) {
+    fn cond_right_bracket(&mut  self) -> Result<(), InterpreterError>  {
         let ret = self.cells[self.cell_pointer] != 0;
         
         if ret {
-            self.return_to_last_left();
-        } 
+            self.return_to_last_left(self.instruction_pointer)
+        } else {
+            Ok(())
+        }
     }
     
-    fn return_to_last_left(&mut self) {
+    // Rewrite to use a stack for better clarity?
+    fn return_to_last_left(&mut  self, right_bracket_pos: usize) -> Result<(), InterpreterError>  {
         self.instruction_pointer -= 1;
         match self.read_token() {
-            // Move to prev left, and then the one before
-            Token::RightBracket  => {
-                self.return_to_last_left();
-                self.return_to_last_left();
-            }, 
-            // Done! 
-            Token::LeftBracket => return, 
-            // Move on to prev character
-            _ => {
-                self.return_to_last_left();
+            Ok(token) => match token {
+                // Move to prev left, and then the one before
+                Token::RightBracket  => {
+                    self.return_to_last_left(self.instruction_pointer)?;
+                    self.return_to_last_left(right_bracket_pos)
+                }, 
+                // Done! 
+                Token::LeftBracket => return Ok(()), 
+                // Move on to prev character
+                _ => {
+                    self.return_to_last_left(right_bracket_pos)
+                },
             },
+            Err(_) => Err(InterpreterError::Parser(ParseError::UnmatchedCloseBracket { pos: right_bracket_pos })),
         }
     }
 
     // Rely on provided write functionality
-    fn print(&mut self) {
+    fn print(&mut  self) -> Result<(), InterpreterError>  {
         let value = self.cells[self.cell_pointer];
-        self.output.write_all(&[value]).expect("Failed to write");
-        //println!("Printing: {value}");
+        match self.output.write_all(&[value]) {
+            Ok(()) => Ok(()),
+            Err(io_error) => Err(InterpreterError::Runtime(RuntimeError::IoError { pos: self.instruction_pointer, error: io_error })),
+        }
     }
     
     // Rely on provided read functionality
-    fn read(&mut self) {
+    fn read(&mut  self) -> Result<(), InterpreterError>  {
+        // todo!("Add errors for reading input");
         let mut buf = [0u8; 1];
         let input_byte = match self.input.read_exact(&mut buf) {
             Ok(()) => buf[0],
-            _ => 0, // EOF behavior, maybe panic instead?
+            Err(err) => {
+                match err.kind() {
+                    // If you reach EOF then just read 0
+                    std::io::ErrorKind::UnexpectedEof => 0,
+                    _ => return Err(InterpreterError::Runtime(RuntimeError::IoError { pos: self.instruction_pointer, error: err })),
+                }
+            },
         };
-        //println!("Read byte: {input_byte}");
         self.cells[self.cell_pointer] = input_byte;
+        Ok(())
     }
 }
 
@@ -141,59 +180,61 @@ mod tests {
     use std::io::Cursor;
     use crate::{token_interpreter::*, utils::lex};
 
-    fn test_program(program_str: &str, input_str: &[u8], output_str: &[u8],) {
+    fn test_program(program_str: &str, input_str: &[u8], output_str: &[u8],) -> Result<(), InterpreterError> {
         let program = lex(program_str);
 
         let input = Cursor::new(input_str);
         let output = Cursor::new(Vec::new());
 
         let interpreter = TokenInterpreter::new(input, output, program);
+        let curr_output = interpreter.run()?;
 
-        assert_eq!(interpreter.run().into_inner(), output_str);
+        assert_eq!(curr_output.into_inner(), output_str);
+        Ok(())
     }
 
 
     #[test]
-    fn test_echo() {
+    fn test_echo() -> Result<(), InterpreterError> {
         test_program(
             "+[,.]", 
             b"abc", 
-            b"abc\0");
+            b"abc\0")
     }
 
     #[test]
-    fn test_lotoken() {
+    fn test_lotoken() -> Result<(), InterpreterError> {
         test_program(
             "++[>++[>.+<-]<-]", 
             b"", 
-            b"\0");
+            b"\0")
     }
 
     // Courtesy of https://brainfuck.org/tests.b 
 
     #[test]
-    fn test_double_io() {
+    fn test_double_io() -> Result<(), InterpreterError> {
         test_program(
             ">,>+++++++++,>+++++++++++[<++++++<++++++<+>>>-]<<.>.<<-.>.>.<<.", 
             b"\n\0", 
-            b"LB\nLB\n");
+            b"LB\nLB\n")
     }
 
     #[test]
-    fn test_array_big_enough() {
+    fn test_array_big_enough() -> Result<(), InterpreterError> {
         test_program(
             "++++[>++++++<-]>[>+++++>+++++++<<-]>>++++<[[>[[>>+<<-]<]>>>-]>-[>+>+<<-]>]
 +++++[>+++++++<<++>-]>.<<.", 
             b"", 
-            b"#\n");
+            b"#\n")
     }
 
     #[test]
-    fn test_some_bs() {
+    fn test_some_bs() -> Result<(), InterpreterError> {
         test_program(
             "[]++++++++++[>>+>+>++++++[<<+<+++>>>-]<<<<-]
 [>>+<<]>[>>]<<<<[>++<[-]]>.>.", 
             b"", 
-            b"H\n");
+            b"H\n")
     }
 }
