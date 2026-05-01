@@ -1,7 +1,7 @@
 mod suite;
 use std::io::Cursor;
 
-use brainfuck_compiler::utils::lex;
+use brainfuck_compiler::parser::lex;
 use brainfuck_compiler::token_interpreter::TokenInterpreter;
 use brainfuck_compiler::error::InterpreterError;
 
