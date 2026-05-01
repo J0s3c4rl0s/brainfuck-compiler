@@ -7,6 +7,12 @@ pub enum InterpreterError {
     Runtime(RuntimeError)
 }
 
+impl From<ParseError> for InterpreterError {
+    fn from(value: ParseError) -> Self {
+        InterpreterError::Parser(value)
+    }
+}
+
 impl From<RuntimeError> for InterpreterError {
     fn from(value: RuntimeError) -> Self {
         InterpreterError::Runtime(value)
@@ -29,6 +35,8 @@ pub enum ParseError {
     UnexpectedChar { ch: char, pos: usize },
     UnmatchedOpenBracket { pos: usize },
     UnmatchedCloseBracket { pos: usize },
+    // Maybe instead make the error about failed cast (only current use of it)
+    TooManySymbols {pos: usize},
 }
 
 impl std::fmt::Display for ParseError {
@@ -38,6 +46,7 @@ impl std::fmt::Display for ParseError {
             ParseError::UnmatchedOpenBracket { pos } => write!(f, "Unmatched open bracket at position {pos}"),
             // Do I even need to variants for this? 
             ParseError::UnmatchedCloseBracket { pos } => write!(f, "Unmatched close bracket at position {pos}"),
+            ParseError::TooManySymbols { pos } => write!(f, "Too many repeated symbols as {pos}. Usize counter overflowed (failed cast)"),
         }
     }
 }

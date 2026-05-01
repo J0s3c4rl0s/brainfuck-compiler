@@ -1,7 +1,9 @@
 use std::io::{Read, Write};
 
-use crate::utils::Op;
+use crate::parser::{Instr, Op};
+use crate::error::{InterpreterError, RuntimeError};
 
+type Result<T> = std::result::Result<T, InterpreterError>;
 
 pub struct Interpreter<R: Read, W: Write> {
     // IO
@@ -17,36 +19,73 @@ impl<R: Read, W: Write> Interpreter<R, W> {
         Self { input, output, cells: vec![0; 30000], cell_pointer: 0}
     }
 
-    pub fn run(&mut self, program: &[Op]){
+    pub fn run(&mut self, program: &[Instr]) -> Result<()>{
         self.exec(program)
     }
 
-    fn exec(&mut self, ops : &[Op]){
-        for op in ops {
-            // No bounds checking, relying on rust panicking at under/overflows
+    fn exec(&mut self, ops : &[Instr]) -> Result<()>{
+        for Instr { op, pos } in ops {
+            // Lets me use shorthand initialization
+            let pos = *pos;
+            
+            // Have bounds checking but it might still panick at large enough n
             match op {
-                Op::Inc(n) => self.cells[self.cell_pointer] += n,
-                Op::Dec(n) => self.cells[self.cell_pointer] -= n,
+                // Add 
+                Op::Inc(n) => {
+                    let curr_cell_value = self.cells[self.cell_pointer];
+                    if curr_cell_value >= u8::MAX - n {
+                        return Err(InterpreterError::Runtime(RuntimeError::IntegerOverflow { pos, left: curr_cell_value, right: *n }));
+                    } 
+        
+                    self.cells[self.cell_pointer] += n
+                },
+                Op::Dec(n) => {
+                    let curr_cell_value = self.cells[self.cell_pointer];
+                    if curr_cell_value < *n {
+                        return Err(InterpreterError::Runtime(RuntimeError::IntegerUnderflow { pos, left: curr_cell_value, right: *n }));
+                    }
+
+                    self.cells[self.cell_pointer] -= n
+                },
                 
-                Op::Left(n) => self.cell_pointer -= n,
-                Op::Right(n) => self.cell_pointer += n,
-                
+                // Shift
+                Op::Left(n) => {
+                    if self.cell_pointer < *n {
+                        return Err(InterpreterError::Runtime(RuntimeError::PointerOutOfBounds { pos, index: self.cell_pointer as isize - *n as isize }));
+                    }
+                    self.cell_pointer -= n
+                },
+                Op::Right(n) => {
+                    if self.cell_pointer >= usize::MAX - *n {
+                        // Shitty cast, might silently underflow 
+                        return Err(InterpreterError::Runtime(RuntimeError::PointerOutOfBounds { pos, index: (self.cell_pointer + *n) as isize }));
+                    }
+                    self.cell_pointer += n
+                },
+
+                // Loop
                 Op::Loop(ops) => {
                     while self.cells[self.cell_pointer] != 0 {
-                        self.exec(ops);
+                        self.exec(ops)?;
                     }
                 },
                 
+                // IO operations
                 Op::Print => {
-                    self.output
-                        .write_all(&[self.cells[self.cell_pointer]])
-                        .expect("Failed to write");
+                    match self.output.write_all(&[self.cells[self.cell_pointer]]) {
+                        Ok(()) => (),
+                        Err(err) => return Err(InterpreterError::Runtime(RuntimeError::IoError { pos: pos, error: err }))
+                    }
                 },
                 Op::Read => {
                     let mut buf = [0u8; 1];
                     let input_byte = match self.input.read_exact(&mut buf) {
                         Ok(()) => buf[0],
-                        _ => 0, // EOF behavior, maybe panic instead?
+                        Err(err) => match err.kind() {
+                            // EOF behaviour
+                            std::io::ErrorKind::UnexpectedEof => 0,
+                            _ => return Err(InterpreterError::Runtime(RuntimeError::IoError { pos: pos, error: err })),
+                        }, // EOF behavior, maybe panic instead?
                     };
                     //println!("Read byte: {input_byte}");
                     let pointer = self.cell_pointer.to_owned();
@@ -54,6 +93,8 @@ impl<R: Read, W: Write> Interpreter<R, W> {
                 },
             }
         }
+
+        Ok(())
     }
 
     pub fn get_output(self) -> W {
@@ -64,18 +105,19 @@ impl<R: Read, W: Write> Interpreter<R, W> {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
-    use crate::{interpreter::*, utils::*};
+    use crate::{interpreter::*, parser::*};
 
-    fn test_program(program_str: &str, input_str: &[u8], output_str: &[u8],) {
-        let program = parse(&lex(program_str));
+    fn test_program(program_str: &str, input_str: &[u8], output_str: &[u8],) -> Result<()> {
+        let program = parse(&lex(program_str))?;
 
         let input = Cursor::new(input_str);
         let output = Cursor::new(Vec::new());
 
         let mut interpreter = Interpreter::new(input, output);
-        interpreter.run(&program);
+        interpreter.run(&program)?;
 
         assert_eq!(interpreter.get_output().into_inner(), output_str);
+        Ok(())
     }
 
 

@@ -1,6 +1,6 @@
 use std::io::{Error, Read, Write};
 
-use crate::{error::{InterpreterError, ParseError, RuntimeError}, utils::Token};
+use crate::{error::{InterpreterError, ParseError, RuntimeError}, parser::Token};
 
 pub struct TokenInterpreter<R: Read, W: Write> {
     // IO
@@ -178,7 +178,7 @@ impl<R: Read, W: Write> TokenInterpreter<R, W> {
 #[cfg(test)]
 mod tests {
     use std::io::Cursor;
-    use crate::{token_interpreter::*, utils::lex};
+    use crate::{token_interpreter::*, parser::lex};
 
     fn test_program(program_str: &str, input_str: &[u8], output_str: &[u8],) -> Result<(), InterpreterError> {
         let program = lex(program_str);
