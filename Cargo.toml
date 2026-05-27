@@ -5,3 +5,8 @@ edition = "2024"
 
 [dependencies]
 num-traits = "0.2"
+cranelift-codegen = "0.128.4"
+# cranelift-jit = "0.128.4"
+cranelift-frontend = "0.128.4"
+target-lexicon = "0.13.5"
+memmap2 = "0.9.10"
