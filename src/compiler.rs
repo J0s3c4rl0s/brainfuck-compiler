@@ -100,7 +100,7 @@ impl<'a> Lowerer<'a> {
         let pointer_minus = self.function_builder.ins().iadd_imm(pointer_value, -offset);
 
         // If pointer_minus < 0 then trap with heap OOB error
-        let is_underflow = self.function_builder.ins().icmp_imm(IntCC::SignedLessThanOrEqual, pointer_minus, 0);
+        let is_underflow = self.function_builder.ins().icmp_imm(IntCC::SignedLessThan, pointer_minus, 0);
         self.function_builder.ins().trapnz(is_underflow, TrapCode::HEAP_OUT_OF_BOUNDS);
 
         self.function_builder.def_var(self.pointer, pointer_minus);
@@ -233,7 +233,11 @@ impl<'a> Lowerer<'a> {
     }
 }
 
-pub fn lower_program(program : &[Instr], read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i32, write_ptr : extern "C" fn(*mut std::ffi::c_void, u8) -> i32) -> Result<CompiledCode, Box<dyn std::error::Error>> {
+pub fn lower_program(
+        program : &[Instr], 
+        read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i32, 
+        write_ptr : extern "C" fn(*mut std::ffi::c_void, u8) -> i32
+    ) -> Result<CompiledCode, Box<dyn std::error::Error>> {
     let flags = set_flags();
     
     let isa = match isa::lookup(Triple::host()) {
@@ -253,6 +257,8 @@ pub fn lower_program(program : &[Instr], read_ptr : extern "C" fn(*mut std::ffi:
 
 
     let mut ctx = Context::for_function(func);
+    // generate disasm for debugging purposes
+    ctx.set_disasm(true);
     let code = match ctx.compile(&*isa, &mut ControlPlane::default()) {
         Ok(x) => x,
         Err(CompileError { inner, func: _ }) => {return Err(Box::new(inner));}

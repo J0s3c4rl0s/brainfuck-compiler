@@ -2,7 +2,7 @@ use std::io::Cursor;
 use std::error::Error;
 
 use brainfuck_compiler::parser::{Instr, lex, parse};
-use brainfuck_compiler::compiler::{self, lower_program, io::{stdin_read, stdout_write}};
+use brainfuck_compiler::compiler::{self, lower_program};
 
 mod suite;
 use crate::suite::TestCase;
@@ -44,6 +44,9 @@ extern "C" fn test_write(
 
 fn run_test(program: Vec<Instr>, input: Cursor<Vec<u8>>, expected_result:  Option<Cursor<Vec<u8>>>) -> Result<(), Box<dyn Error>> {
     let code = lower_program(&program, test_read, test_write)?;
+    // print assembly
+    // println!("{}", code.vcode.clone().unwrap());
+
     let jit_program = compiler::JITProgram::new(code) ;
 
     let mut io_ctx = TestContext {
@@ -80,7 +83,6 @@ fn basic_tests() -> Result<(), Box<dyn Error>> {
         let TestCase {name, input, result, program: program_str} = test;
         println!("Running integration test {name}");
         let program = parse(&lex(&program_str))?;
-
 
         run_test(program, input, result)?;
     }
