@@ -17,7 +17,6 @@ use crate::parser::{Instr, Op};
 mod jit;
 pub mod io;
 
-
 pub use jit::JITProgram;
 
 fn set_flags() -> settings::Flags {
@@ -27,8 +26,9 @@ fn set_flags() -> settings::Flags {
 }
 
 fn setup_function(pointer_type: Type) -> (Function, FunctionBuilderContext) {
-    // receive memory address as parameter, and return pointer to io::Error
     let mut sig = Signature::new(CallConv::SystemV);
+    // receive memory and IoContext addresses as parameters
+    sig.params.push(AbiParam::new(pointer_type));
     sig.params.push(AbiParam::new(pointer_type));
     sig.returns.push(AbiParam::new(pointer_type));
     
@@ -45,8 +45,10 @@ fn setup_main_block(function_builder: &mut FunctionBuilder) -> Block {
     block
 }
 
-pub fn define_indirect_print(write_ptr : extern "C" fn(u8) -> i32, pointer_type: Type, function_builder: &mut FunctionBuilder) -> (SigRef, Value) {
+pub fn define_indirect_print(write_ptr : extern "C" fn(*mut std::ffi::c_void, u8) -> i32, pointer_type: Type, function_builder: &mut FunctionBuilder) -> (SigRef, Value) {
     let mut write_sig = Signature::new(CallConv::SystemV);
+    // Pointer to IoContext
+    write_sig.params.push(AbiParam::new(pointer_type));
     write_sig.params.push(AbiParam::new(I8));
     write_sig.returns.push(AbiParam::new(pointer_type));
     let write_sig = function_builder.import_signature(write_sig);
@@ -56,9 +58,10 @@ pub fn define_indirect_print(write_ptr : extern "C" fn(u8) -> i32, pointer_type:
     (write_sig, write_address)
 }
 
-pub fn define_indirect_read(read_ptr : extern "C" fn() -> i32, pointer_type: Type, function_builder: &mut FunctionBuilder<'_>) -> (SigRef, Value) {
+pub fn define_indirect_read(read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i32, pointer_type: Type, function_builder: &mut FunctionBuilder<'_>) -> (SigRef, Value) {
     let mut read_sig = Signature::new(CallConv::SystemV);
-    // read_sig.params.push(AbiParam::new(pointer_type));
+    // Pointer to IoContext
+    read_sig.params.push(AbiParam::new(pointer_type));
     // Should the return type just be a byte?
     read_sig.returns.push(AbiParam::new(pointer_type));
     let read_sig = function_builder.import_signature(read_sig);
@@ -74,6 +77,7 @@ struct Lowerer<'a> {
     pointer_type: Type,
     memory_address: Value,
     mem_flags: MemFlags,
+    io_ctx_address: Value,
     write_address: Value,
     write_sig: SigRef,
     read_address: Value,
@@ -139,14 +143,14 @@ impl<'a> Lowerer<'a> {
         self.function_builder.switch_to_block(after_block);
     }
     
-    fn lower_write(&mut self) {
+    fn lower_write(&mut self, io_ctx_ptr_val : Value) {
         let pointer_value = self.function_builder.use_var(self.pointer);
         let cell_address = self.function_builder.ins().iadd(self.memory_address, pointer_value);
         let cell_value = self.function_builder.ins().load(I8, self.mem_flags, cell_address, 0);
 
         let inst = self.function_builder
             .ins()
-            .call_indirect(self.write_sig, self.write_address, &[cell_value]);
+            .call_indirect(self.write_sig, self.write_address, &[io_ctx_ptr_val, cell_value]);
         let result = self.function_builder.inst_results(inst)[0];
 
         // Make this work with enums instead
@@ -155,13 +159,13 @@ impl<'a> Lowerer<'a> {
         self.function_builder.ins().trapnz(result, trap_code);
     }
     
-    fn lower_read(&mut self) {
+    fn lower_read(&mut self, io_ctx_ptr_val : Value) {
         let pointer_value = self.function_builder.use_var(self.pointer);
         let cell_address = self.function_builder.ins().iadd(self.memory_address, pointer_value);
 
         let inst = self.function_builder
             .ins()
-            .call_indirect(self.read_sig, self.read_address, &[]);
+            .call_indirect(self.read_sig, self.read_address, &[io_ctx_ptr_val]);
         let result = self.function_builder.inst_results(inst)[0];
         
         self.function_builder.ins().store(self.mem_flags, result, cell_address, 0);
@@ -183,8 +187,8 @@ impl<'a> Lowerer<'a> {
                 
                 Op::Loop(inner) => self.lower_loop(inner),
                 
-                Op::Print => self.lower_write(),
-                Op::Read => self.lower_read(),
+                Op::Print => self.lower_write(self.io_ctx_address),
+                Op::Read => self.lower_read(self.io_ctx_address),
             }
         }
     }
@@ -197,7 +201,14 @@ impl<'a> Lowerer<'a> {
         self.function_builder.finalize();
     }
 
-    fn new(func : &'a mut Function, func_ctx: &'a mut FunctionBuilderContext, pointer_type: Type, read_ptr : extern "C" fn() -> i32, write_ptr : extern "C" fn(u8) -> i32) -> Self {
+    fn new(
+        func : &'a mut Function, 
+        func_ctx: &'a mut FunctionBuilderContext, 
+        pointer_type: Type, 
+        read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i32, 
+        write_ptr : extern "C" fn(*mut std::ffi::c_void, u8) -> i32
+    ) -> Self {
+        
         let mut function_builder = FunctionBuilder::new(func, func_ctx);
 
         // create the variable `pointer` (it is a offset from memory address)
@@ -206,6 +217,7 @@ impl<'a> Lowerer<'a> {
         let block = setup_main_block(&mut function_builder);
 
         let memory_address = function_builder.block_params(block)[0];
+        let io_ctx_address = function_builder.block_params(block)[1];
 
         // initialize pointer to 0 
         let zero = function_builder.ins().iconst(pointer_type, 0);
@@ -217,11 +229,11 @@ impl<'a> Lowerer<'a> {
 
         let (read_sig, read_address) = define_indirect_read(read_ptr, pointer_type, &mut function_builder);
 
-        Self { function_builder, pointer, pointer_type, memory_address, mem_flags, write_address, write_sig, read_address, read_sig }
+        Self { function_builder, pointer, pointer_type, memory_address, mem_flags, io_ctx_address, write_address, write_sig, read_address, read_sig }
     }
 }
 
-pub fn lower_program(program : &[Instr], read_ptr : extern "C" fn() -> i32, write_ptr : extern "C" fn(u8) -> i32) -> Result<CompiledCode, Box<dyn std::error::Error>> {
+pub fn lower_program(program : &[Instr], read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i32, write_ptr : extern "C" fn(*mut std::ffi::c_void, u8) -> i32) -> Result<CompiledCode, Box<dyn std::error::Error>> {
     let flags = set_flags();
     
     let isa = match isa::lookup(Triple::host()) {
