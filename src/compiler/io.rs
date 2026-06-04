@@ -3,7 +3,7 @@ use std::io::Read;
 use cranelift_codegen::{ir::{AbiParam, InstBuilder, SigRef, Signature, Type, Value, types::I8}, isa::CallConv};
 use cranelift_frontend::FunctionBuilder;
 
-pub extern "C" fn bf_read() -> i32 {
+pub extern "C" fn stdin_read() -> i32 {
     let mut stdin = std::io::stdin();
     let mut buf: [u8; 1] = [0; 1];
 
@@ -18,7 +18,7 @@ pub extern "C" fn bf_read() -> i32 {
     }
 }
 
-pub extern "C" fn bf_write(byte: u8) -> i32 {
+pub extern "C" fn stdout_write(byte: u8) -> i32 {
     print!("{}", byte as char);
     0
 }
