@@ -9,14 +9,16 @@ use cranelift_codegen::CompileError;
 
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 
-use std::sync::Arc;
-use std::io::{Read, Write};
 
 use target_lexicon::Triple;
 
 use crate::parser::{Instr, Op};
 
 mod jit;
+pub mod io;
+
+
+pub use jit::JITProgram;
 
 fn set_flags() -> settings::Flags {
     let mut builder = settings::builder();
@@ -43,44 +45,25 @@ fn setup_main_block(function_builder: &mut FunctionBuilder) -> Block {
     block
 }
 
-extern "C" fn bf_write(byte: u8) -> i32 {
-    print!("{}", byte as char);
-    0
-}
-
-fn define_indirect_print(pointer_type: Type, function_builder: &mut FunctionBuilder) -> (SigRef, Value) {
+pub fn define_indirect_print(write_ptr : extern "C" fn(u8) -> i32, pointer_type: Type, function_builder: &mut FunctionBuilder) -> (SigRef, Value) {
     let mut write_sig = Signature::new(CallConv::SystemV);
     write_sig.params.push(AbiParam::new(I8));
     write_sig.returns.push(AbiParam::new(pointer_type));
     let write_sig = function_builder.import_signature(write_sig);
 
-    let write_address = bf_write as *const () as i64;
+    let write_address = write_ptr as *const () as i64;
     let write_address = function_builder.ins().iconst(pointer_type, write_address);
     (write_sig, write_address)
 }
 
-extern "C" fn bf_read() -> i32 {
-    let mut stdin = std::io::stdin();
-    let mut buf: [u8; 1] = [0; 1];
-
-    // Are these error codes in line with the interpreter values?
-    match stdin.read_exact(&mut buf) {
-        Ok(()) =>buf[0] as i32, // byte read
-        // IO error or EOF
-        Err(err) => match err.kind() {
-            std::io::ErrorKind::UnexpectedEof => 0, // EOF behaviour
-            _ => -1, // IO Error
-        },         
-    }
-}
-
-fn define_indirect_read(pointer_type: Type, function_builder: &mut FunctionBuilder<'_>) -> (SigRef, Value) {
+pub fn define_indirect_read(read_ptr : extern "C" fn() -> i32, pointer_type: Type, function_builder: &mut FunctionBuilder<'_>) -> (SigRef, Value) {
     let mut read_sig = Signature::new(CallConv::SystemV);
-    read_sig.params.push(AbiParam::new(pointer_type));
+    // read_sig.params.push(AbiParam::new(pointer_type));
+    // Should the return type just be a byte?
     read_sig.returns.push(AbiParam::new(pointer_type));
     let read_sig = function_builder.import_signature(read_sig);
 
-    let read_address = bf_read as *const () as i64;
+    let read_address = read_ptr as *const () as i64;
     let read_address = function_builder.ins().iconst(pointer_type, read_address);
     (read_sig, read_address)
 }
@@ -178,13 +161,15 @@ impl<'a> Lowerer<'a> {
 
         let inst = self.function_builder
             .ins()
-            .call_indirect(self.read_sig, self.read_address, &[cell_address]);
+            .call_indirect(self.read_sig, self.read_address, &[]);
         let result = self.function_builder.inst_results(inst)[0];
+        
+        self.function_builder.ins().store(self.mem_flags, result, cell_address, 0);
     }
 
     fn lower_instrs(&mut self, program: &[Instr]) {
         for b in program.iter() {
-            let Instr { op, pos } = b;
+            let Instr { op, pos: _pos } = b;
             match op {
                 // Is this a safe cast? Can I make it safer?
                 // Kind of assuming that the pointer type is gonna be 64 bits methinks
@@ -212,7 +197,7 @@ impl<'a> Lowerer<'a> {
         self.function_builder.finalize();
     }
 
-    fn new(func : &'a mut Function, func_ctx: &'a mut FunctionBuilderContext, pointer_type: Type) -> Self {
+    fn new(func : &'a mut Function, func_ctx: &'a mut FunctionBuilderContext, pointer_type: Type, read_ptr : extern "C" fn() -> i32, write_ptr : extern "C" fn(u8) -> i32) -> Self {
         let mut function_builder = FunctionBuilder::new(func, func_ctx);
 
         // create the variable `pointer` (it is a offset from memory address)
@@ -228,27 +213,27 @@ impl<'a> Lowerer<'a> {
 
         let mem_flags = MemFlags::new();
 
-        let (write_sig, write_address) = define_indirect_print(pointer_type, &mut function_builder);
+        let (write_sig, write_address) = define_indirect_print(write_ptr, pointer_type, &mut function_builder);
 
-        let (read_sig, read_address) = define_indirect_read(pointer_type, &mut function_builder);
+        let (read_sig, read_address) = define_indirect_read(read_ptr, pointer_type, &mut function_builder);
 
         Self { function_builder, pointer, pointer_type, memory_address, mem_flags, write_address, write_sig, read_address, read_sig }
     }
 }
 
-pub fn lower_program(program : &[Instr]) -> Result<CompiledCode, Box<dyn std::error::Error>> {
+pub fn lower_program(program : &[Instr], read_ptr : extern "C" fn() -> i32, write_ptr : extern "C" fn(u8) -> i32) -> Result<CompiledCode, Box<dyn std::error::Error>> {
     let flags = set_flags();
     
     let isa = match isa::lookup(Triple::host()) {
         // Should I really panic here?
-        Err(_) => panic!("x86_64 ISA is not avaliable"),
+        Err(err) => return Err(Box::new(err)), 
         Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
     };
     let pointer_type = isa.pointer_type();
 
     let (mut func, mut func_ctx) = setup_function(pointer_type); 
 
-    let mut compiler = Lowerer::new(&mut func, &mut func_ctx, pointer_type);
+    let mut compiler = Lowerer::new(&mut func, &mut func_ctx, pointer_type, read_ptr, write_ptr);
 
     compiler.lower_instrs(program);
     compiler.close_function();
