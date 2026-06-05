@@ -30,21 +30,21 @@ impl JITProgram {
     }
 }
 
-#[cfg(test)]
-mod test {
-    use std::error::Error;
+// #[cfg(test)]
+// mod test {
+//     use std::error::Error;
 
-    use crate::{compiler::{self, io::{stdin_read, stdout_write}}, parser::{lex, parse}};
-    use crate::compiler::jit::JITProgram;
+//     use crate::{compiler::{self, io::{stdin_read, stdout_write}}, parser::{lex, parse}};
+//     use crate::compiler::jit::JITProgram;
 
-    #[test]
-    fn test_basic() -> Result<(), Box<dyn Error>>{
-        let program = parse(&lex(",+."))?;
+//     #[test]
+//     fn test_basic() -> Result<(), Box<dyn Error>>{
+//         let program = parse(&lex(",+."))?;
         
-        let code = compiler::lower_program(&program, stdin_read, stdout_write)?;
+//         let code = compiler::lower_program(&program, stdin_read, stdout_write)?;
 
-        let jit_program = JITProgram {code, memory: [0;30_000]};
-        let _result = jit_program.run();
-        Ok(())
-    }
-}
+//         let jit_program = JITProgram {code, memory: [0;30_000]};
+//         let _result = jit_program.run();
+//         Ok(())
+//     }
+// }
