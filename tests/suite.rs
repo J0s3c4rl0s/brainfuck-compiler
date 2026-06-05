@@ -26,10 +26,30 @@ pub fn make_tests() -> Vec<TestCase<Cursor<Vec<u8>>, Cursor<Vec<u8>>>> {
             Cursor::new(b"abc".to_vec()), 
             Some(Cursor::new(b"abc\0".to_vec()))),
         TestCase::new(
-            "test_lotoken".to_string(),
-            "++[>++[>.+<-]<-]".to_string(), 
+            "test_1+1_print".to_string(), 
+            "++.".to_string(),
             Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(b"\0".to_vec()))),
+            Some(Cursor::new(vec![2 as u8]))),  
+        TestCase::new(
+            "test_1+1-1_print".to_string(), 
+            "++-.".to_string(),
+            Cursor::new(b"".to_vec()), 
+            Some(Cursor::new(vec![1 as u8]))),  
+        TestCase::new(
+            "test_1+1-1_print".to_string(), 
+            "++-.".to_string(),
+            Cursor::new(b"".to_vec()), 
+            Some(Cursor::new(vec![1 as u8]))),  
+        TestCase::new(
+            "test_shiftr".to_string(), 
+            ">".to_string(),
+            Cursor::new(b"".to_vec()), 
+            Some(Cursor::new(vec![]))),  
+        TestCase::new(
+            "test_shiftrl".to_string(), 
+            "><".to_string(),
+            Cursor::new(b"".to_vec()), 
+            Some(Cursor::new(vec![]))),        
         // Following examples courtesy of https://brainfuck.org/tests.b 
         TestCase::new(
             "test_double_io".to_string(),
@@ -47,6 +67,11 @@ pub fn make_tests() -> Vec<TestCase<Cursor<Vec<u8>>, Cursor<Vec<u8>>>> {
             "[]++++++++++[>>+>+>++++++[<<+<+++>>>-]<<<<-]
 // [>>+<<]>[>>]<<<<[>++<[-]]>.>.".to_string(), 
             Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(b"H\n".to_vec()))),
+            Some(Cursor::new(b"H\n".to_vec()))),        
+        TestCase::new(
+            "test_lotoken".to_string(),
+            "++[>++[>.+<-]<-]".to_string(), 
+            Cursor::new(b"".to_vec()), 
+            Some(Cursor::new(b"\0".to_vec()))),
     ]
 }

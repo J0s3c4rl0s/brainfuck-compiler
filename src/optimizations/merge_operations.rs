@@ -1,5 +1,6 @@
 use crate::parser::{Instr, Op};
 
+#[derive(Debug, PartialEq, Eq)]
 enum MergeResult {
     Replace(Instr),
     RemoveBoth,
@@ -63,9 +64,9 @@ fn merge_inc_dec(n: u8, m: u8, pos: usize) -> MergeResult {
     if res == 0 {
         MergeResult::RemoveBoth
     } else if res < 0 {
-        MergeResult::Replace(Instr { op: Op::Dec(res as u8), pos })
+        MergeResult::Replace(Instr { op: Op::Dec((-res) as u8), pos })
     } else {
-        MergeResult::Replace(Instr { op: Op::Inc((-res) as u8), pos })
+        MergeResult::Replace(Instr { op: Op::Inc(res as u8), pos })
     }
 }
 
@@ -78,5 +79,35 @@ fn merge_shift(n: usize, m: usize, pos: usize) -> MergeResult {
         MergeResult::Replace(Instr { op: Op::Left(res as usize), pos })
     } else {
         MergeResult::Replace(Instr { op: Op::Right((-res) as usize), pos })
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{optimizations::merge_operations::{MergeResult, merge_in_program, merge_ops}, parser::{Instr, Op}};
+
+    #[test]
+    fn one_minus_one_prog() {
+        let program = vec![Instr{op: Op::Inc(1), pos: 0}, Instr{op: Op::Dec(1), pos: 1}];
+
+        let optimized = merge_in_program(program);
+
+        assert_eq!(optimized, vec![]);
+    }
+
+    #[test]
+    fn two_minus_one_prog() {
+        let program = vec![Instr{op: Op::Inc(2), pos: 0}, Instr{op: Op::Dec(1), pos: 1}];
+
+        let optimized = merge_in_program(program);
+
+        assert_eq!(optimized, vec![Instr{op: Op::Inc(1), pos: 0}]);
+    }
+
+    #[test]
+    fn two_minus_one_ops() {
+        let res = merge_ops(&Instr { op: Op::Inc(2), pos: 0 }, &Instr { op: Op::Dec(1), pos: 1 });
+
+        assert_eq!(res, MergeResult::Replace(Instr { op: Op::Inc(1), pos: 0 }));
     }
 }

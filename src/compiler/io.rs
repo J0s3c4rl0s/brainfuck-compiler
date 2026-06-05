@@ -1,9 +1,8 @@
-use std::io::Read;
+use std::{ffi::c_void, io::Read};
 
-use cranelift_codegen::{ir::{AbiParam, InstBuilder, SigRef, Signature, Type, Value, types::I8}, isa::CallConv};
-use cranelift_frontend::FunctionBuilder;
+pub struct StdContext;
 
-pub extern "C" fn stdin_read() -> i32 {
+pub extern "C" fn stdin_read(_ctx: *mut c_void) -> i32 {
     let mut stdin = std::io::stdin();
     let mut buf: [u8; 1] = [0; 1];
 
@@ -18,7 +17,7 @@ pub extern "C" fn stdin_read() -> i32 {
     }
 }
 
-pub extern "C" fn stdout_write(byte: u8) -> i32 {
+pub extern "C" fn stdout_write(_ctx: *mut c_void, byte: u8) -> i32 {
     print!("{}", byte as char);
     0
 }
