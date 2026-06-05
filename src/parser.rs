@@ -32,13 +32,13 @@ pub fn lex(program: &str) -> Vec<Token> {
     }).collect()
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Instr {
     pub op: Op,
     pub pos: usize
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op { 
     Inc(u8), // +
     Dec(u8), // -
