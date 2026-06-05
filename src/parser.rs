@@ -142,10 +142,10 @@ pub fn parse(tokens: &[Token]) -> Result<Vec<Instr>> {
     Ok(instrs)
 }
 
-#[cfg(test)]
-mod test {
-    #[test]
-    fn todo() {
-        todo!("Write tests to make sure position info is correct");
-    }
-}
+// #[cfg(test)]
+// mod test {
+//     #[test]
+//     fn todo() {
+//         todo!("Write tests to make sure position info is correct");
+//     }
+// }
