@@ -1,6 +1,8 @@
 use std::io::Cursor;
 use std::error::Error;
 
+use brainfuck_compiler::optimizations::merge_operations::merge_in_program;
+use brainfuck_compiler::optimizations::optimize;
 use brainfuck_compiler::parser::{Instr, lex, parse};
 use brainfuck_compiler::compiler::{self, lower_program};
 
@@ -83,6 +85,20 @@ fn basic_tests() -> Result<(), Box<dyn Error>> {
         let TestCase {name, input, result, program: program_str} = test;
         println!("Running integration test {name}");
         let program = parse(&lex(&program_str))?;
+
+        run_test(program, input, result)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn merge_tests() -> Result<(), Box<dyn Error>> {
+    let tests = suite::make_tests();
+
+    for test in tests{
+        let TestCase {name, input, result, program: program_str} = test;
+        println!("Running integration test {name}");
+        let program = optimize(parse(&lex(&program_str))?, vec![merge_in_program]);
 
         run_test(program, input, result)?;
     }
