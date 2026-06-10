@@ -1,4 +1,4 @@
-use std::io::{Error, Read, Write};
+use std::io::{Read, Write};
 
 use crate::{error::{InterpreterError, ParseError, RuntimeError}, parser::Token};
 

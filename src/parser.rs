@@ -141,11 +141,3 @@ pub fn parse(tokens: &[Token]) -> Result<Vec<Instr>> {
     let (instrs, _, _) = parse_block(tokens, 0)?;
     Ok(instrs)
 }
-
-// #[cfg(test)]
-// mod test {
-//     #[test]
-//     fn todo() {
-//         todo!("Write tests to make sure position info is correct");
-//     }
-// }

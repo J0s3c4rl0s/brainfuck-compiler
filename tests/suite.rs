@@ -1,5 +1,4 @@
 use std::io::{Cursor, Read, Write};
-use brainfuck_compiler::parser::{Op, lex, parse};
 
 pub struct TestCase<R: Read, W: Write> {
     pub name: String,
