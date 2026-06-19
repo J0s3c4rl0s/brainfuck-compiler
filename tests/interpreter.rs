@@ -10,7 +10,6 @@ use brainfuck_compiler::error::InterpreterError;
 use crate::suite::TestCase;
 
 fn run_test(program: Vec<Instr>, input: Cursor<Vec<u8>>, result:  Option<Cursor<Vec<u8>>>) -> Result<(), InterpreterError> {
-
     let output = Cursor::new(Vec::new());
     let mut interpreter = Interpreter::new(input, output);
 

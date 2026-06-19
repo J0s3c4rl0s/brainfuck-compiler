@@ -10,3 +10,4 @@ cranelift-codegen = "0.128.4"
 cranelift-frontend = "0.128.4"
 target-lexicon = "0.13.5"
 memmap2 = "0.9.10"
+clap = { version = "4.6.1", features = ["derive"] }
