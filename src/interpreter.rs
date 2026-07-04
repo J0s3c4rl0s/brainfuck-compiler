@@ -1,29 +1,24 @@
-use std::io::{Read, Write};
 
+use crate::io::RuntimeIo;
 use crate::parser::{Instr, Op};
 use crate::error::{InterpreterError, RuntimeError};
 
 type Result<T> = std::result::Result<T, InterpreterError>;
 
-pub struct Interpreter<R: Read, W: Write> {
+pub struct Interpreter<'a, IO> where IO : RuntimeIo {
     // IO
-    input : R,
-    output: W,
+    io_ctx: &'a mut IO,
     // Memory
     cells : Vec<u8>,
     cell_pointer : usize,
 }
 
-impl<R: Read, W: Write> Interpreter<R, W> {
-    pub fn new(input : R, output: W) -> Self {
-        Self { input, output, cells: vec![0; 30000], cell_pointer: 0}
+impl<'a, IO> Interpreter<'a,IO> where IO : RuntimeIo {
+    pub fn new(io_ctx: &'a mut IO) -> Self {
+        Self { io_ctx, cells: vec![0; 30000], cell_pointer: 0}
     }
 
-    pub fn run(&mut self, program: &[Instr]) -> Result<()>{
-        self.exec(program)
-    }
-
-    fn exec(&mut self, ops : &[Instr]) -> Result<()>{
+    pub fn exec(&mut self, ops : &[Instr]) -> Result<()>{
         for Instr { op, pos } in ops {
             // Lets me use shorthand initialization
             let pos = *pos;
@@ -72,21 +67,30 @@ impl<R: Read, W: Write> Interpreter<R, W> {
                 
                 // IO operations
                 Op::Print => {
-                    match self.output.write_all(&[self.cells[self.cell_pointer]]) {
-                        Ok(()) => (),
-                        Err(err) => return Err(InterpreterError::Runtime(RuntimeError::IoError { pos: pos, error: err }))
-                    }
+                    // Add a result to write for IO errors?
+                    self.io_ctx.write(self.cells[self.cell_pointer])
+                    
+                    // match self.output.write_all(&[self.cells[self.cell_pointer]]) {
+                    //     Ok(()) => (),
+                    //     Err(err) => return Err(InterpreterError::Runtime(RuntimeError::IoError { pos: pos, error: err }))
+                    // }
                 },
                 Op::Read => {
-                    let mut buf = [0u8; 1];
-                    let input_byte = match self.input.read_exact(&mut buf) {
-                        Ok(()) => buf[0],
-                        Err(err) => match err.kind() {
-                            // EOF behaviour
-                            std::io::ErrorKind::UnexpectedEof => 0,
-                            _ => return Err(InterpreterError::Runtime(RuntimeError::IoError { pos: pos, error: err })),
-                        }, // EOF behavior, maybe panic instead?
-                    };
+                    // let mut buf = [0u8; 1];
+                    // let input_byte = match self.input.read_exact(&mut buf) {
+                    //     Ok(()) => buf[0],
+                    //     Err(err) => match err.kind() {
+                    //         // EOF behaviour
+                    //         std::io::ErrorKind::UnexpectedEof => 0,
+                    //         _ => return Err(InterpreterError::Runtime(RuntimeError::IoError { pos: pos, error: err })),
+                    //     }, // EOF behavior, maybe panic instead?
+                    // };
+                    
+                    let input_byte = match self.io_ctx.read() {
+                        Some(b) => b,
+                        // Always assume None is EOF?
+                        None => 0,
+                    } ;
                     //println!("Read byte: {input_byte}");
                     let pointer = self.cell_pointer.to_owned();
                     self.cells[pointer] = input_byte;
@@ -95,9 +99,5 @@ impl<R: Read, W: Write> Interpreter<R, W> {
         }
 
         Ok(())
-    }
-
-    pub fn get_output(self) -> W {
-        self.output
     }
 }

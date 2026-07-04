@@ -1,5 +1,7 @@
 use std::io::{Cursor, Read, Write};
 
+use brainfuck_compiler::io::RuntimeIo;
+
 pub struct TestCase<R: Read, W: Write> {
     pub name: String,
     // Arbitrary or string for I/O?
@@ -13,6 +15,29 @@ pub struct TestCase<R: Read, W: Write> {
 impl<R: Read, W: Write> TestCase<R, W> {
     fn new(name: String, program: String, input: R, result: Option<W>) -> Self {
         Self { name, input, result, program }
+    }
+}
+
+
+pub struct TestContext {
+    pub input: Vec<u8>,
+    pub input_pos: usize,
+    pub output: Vec<u8>,
+}
+
+impl RuntimeIo for TestContext {
+    fn read(&mut self) -> Option<u8> {
+        let val = self
+            .input
+            .get(self.input_pos)
+            .copied();
+        self.input_pos += 1;
+        val
+    }
+
+    fn write(&mut self, byte: u8) {
+        self.output
+            .push(byte);
     }
 }
 

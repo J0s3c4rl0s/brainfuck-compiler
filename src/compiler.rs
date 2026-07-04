@@ -12,10 +12,10 @@ use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 
 use target_lexicon::Triple;
 
+use crate::io::{bf_read, bf_write};
 use crate::parser::{Instr, Op};
 
 mod jit;
-pub mod io;
 
 pub use jit::JITProgram;
 
@@ -45,7 +45,7 @@ fn setup_main_block(function_builder: &mut FunctionBuilder) -> Block {
     block
 }
 
-pub fn define_indirect_print(write_ptr : extern "C" fn(*mut std::ffi::c_void, u8) -> i32, pointer_type: Type, function_builder: &mut FunctionBuilder) -> (SigRef, Value) {
+pub fn define_indirect_print(pointer_type: Type, function_builder: &mut FunctionBuilder) -> (SigRef, Value) {
     let mut write_sig = Signature::new(CallConv::SystemV);
     // Pointer to IoContext
     write_sig.params.push(AbiParam::new(pointer_type));
@@ -53,12 +53,12 @@ pub fn define_indirect_print(write_ptr : extern "C" fn(*mut std::ffi::c_void, u8
     write_sig.returns.push(AbiParam::new(pointer_type));
     let write_sig = function_builder.import_signature(write_sig);
 
-    let write_address = write_ptr as *const () as i64;
+    let write_address = bf_write as *const () as i64;
     let write_address = function_builder.ins().iconst(pointer_type, write_address);
     (write_sig, write_address)
 }
 
-pub fn define_indirect_read(read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i32, pointer_type: Type, function_builder: &mut FunctionBuilder<'_>) -> (SigRef, Value) {
+pub fn define_indirect_read(pointer_type: Type, function_builder: &mut FunctionBuilder<'_>) -> (SigRef, Value) {
     let mut read_sig = Signature::new(CallConv::SystemV);
     // Pointer to IoContext
     read_sig.params.push(AbiParam::new(pointer_type));
@@ -66,7 +66,7 @@ pub fn define_indirect_read(read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i
     read_sig.returns.push(AbiParam::new(pointer_type));
     let read_sig = function_builder.import_signature(read_sig);
 
-    let read_address = read_ptr as *const () as i64;
+    let read_address = bf_read as *const () as i64;
     let read_address = function_builder.ins().iconst(pointer_type, read_address);
     (read_sig, read_address)
 }
@@ -201,14 +201,7 @@ impl<'a> Lowerer<'a> {
         self.function_builder.finalize();
     }
 
-    fn new(
-        func : &'a mut Function, 
-        func_ctx: &'a mut FunctionBuilderContext, 
-        pointer_type: Type, 
-        read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i32, 
-        write_ptr : extern "C" fn(*mut std::ffi::c_void, u8) -> i32
-    ) -> Self {
-        
+    fn new(func : &'a mut Function, func_ctx: &'a mut FunctionBuilderContext, pointer_type: Type) -> Self {
         let mut function_builder = FunctionBuilder::new(func, func_ctx);
 
         // create the variable `pointer` (it is a offset from memory address)
@@ -225,23 +218,18 @@ impl<'a> Lowerer<'a> {
 
         let mem_flags = MemFlags::new();
 
-        let (write_sig, write_address) = define_indirect_print(write_ptr, pointer_type, &mut function_builder);
-
-        let (read_sig, read_address) = define_indirect_read(read_ptr, pointer_type, &mut function_builder);
+        // Set up IO functions
+        let (write_sig, write_address) = define_indirect_print(pointer_type, &mut function_builder);
+        let (read_sig, read_address) = define_indirect_read(pointer_type, &mut function_builder);
 
         Self { function_builder, pointer, pointer_type, memory_address, mem_flags, io_ctx_address, write_address, write_sig, read_address, read_sig }
     }
 }
 
-pub fn lower_program(
-        program : &[Instr], 
-        read_ptr : extern "C" fn(*mut std::ffi::c_void) -> i32, 
-        write_ptr : extern "C" fn(*mut std::ffi::c_void, u8) -> i32
-    ) -> Result<CompiledCode, Box<dyn std::error::Error>> {
+pub fn lower_program(program : &[Instr]) -> Result<CompiledCode, Box<dyn std::error::Error>> {
     let flags = set_flags();
     
     let isa = match isa::lookup(Triple::host()) {
-        // Should I really panic here?
         Err(err) => return Err(Box::new(err)), 
         Ok(isa_builder) => isa_builder.finish(flags).unwrap(),
     };
@@ -249,7 +237,7 @@ pub fn lower_program(
 
     let (mut func, mut func_ctx) = setup_function(pointer_type); 
 
-    let mut compiler = Lowerer::new(&mut func, &mut func_ctx, pointer_type, read_ptr, write_ptr);
+    let mut compiler = Lowerer::new(&mut func, &mut func_ctx, pointer_type);
 
     compiler.lower_instrs(program);
     compiler.close_function();

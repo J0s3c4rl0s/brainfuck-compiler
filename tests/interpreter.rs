@@ -7,21 +7,26 @@ use brainfuck_compiler::optimizations::merge_operations::merge_in_program;
 use brainfuck_compiler::parser::{Instr, lex, parse};
 use brainfuck_compiler::error::InterpreterError;
 
-use crate::suite::TestCase;
+use crate::suite::{TestCase, TestContext};
 
 fn run_test(program: Vec<Instr>, input: Cursor<Vec<u8>>, result:  Option<Cursor<Vec<u8>>>) -> Result<(), InterpreterError> {
-    let output = Cursor::new(Vec::new());
-    let mut interpreter = Interpreter::new(input, output);
+    let mut test_ctx = TestContext {
+        input: input.into_inner(),
+        input_pos: 0,
+        output: vec![],
+    };
+
+    let mut interpreter = Interpreter::new(&mut test_ctx);
 
     match result {
         Some(succesful_result) => {
-            interpreter.run(&program)?;
-            assert_eq!(interpreter.get_output().into_inner(), succesful_result.into_inner());
+            interpreter.exec(&program)?;
+            assert_eq!(test_ctx.output, succesful_result.into_inner());
             Ok(())
         }
         None => {
             // If none then we expect some Error 
-            assert!(matches!(interpreter.run(&program), Err(_)));
+            assert!(matches!(interpreter.exec(&program), Err(_)));
             Ok(())
         }
     }
