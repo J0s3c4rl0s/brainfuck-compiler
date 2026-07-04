@@ -11,16 +11,10 @@ mod suite;
 use crate::suite::{TestCase, TestContext};
 
 
-fn run_test(program: Vec<Instr>, input: Cursor<Vec<u8>>, expected_result:  Option<Cursor<Vec<u8>>>) -> Result<(), Box<dyn Error>> {
+fn run_test(program: Vec<Instr>, mut test_ctx: TestContext, expected_result:  Option<Vec<u8>>) -> Result<(), Box<dyn Error>> {
     let code = lower_program(&program)?;
 
     let jit_program = compiler::JITProgram::new(code) ;
-
-    let mut test_ctx = TestContext {
-        input: input.into_inner(),
-        input_pos: 0,
-        output: vec![],
-    };
 
     let mut io_ctx = IoContext {
         io: Box::new(&mut test_ctx)
@@ -35,7 +29,7 @@ fn run_test(program: Vec<Instr>, input: Cursor<Vec<u8>>, expected_result:  Optio
         Some(succesful_result) => {
             // Check that compiled program did not fail
             assert_eq!(result_code, 0);
-            assert_eq!(test_ctx.output, succesful_result.into_inner());
+            assert_eq!(test_ctx.output, succesful_result);
             Ok(())
         }
         None => {
@@ -51,11 +45,11 @@ fn basic_tests() -> Result<(), Box<dyn Error>> {
     let tests = suite::make_tests();
 
     for test in tests{
-        let TestCase {name, input, result, program: program_str} = test;
+        let TestCase {name, ctx, expected_result, program: program_str} = test;
         println!("Running integration test {name}");
         let program = parse(&lex(&program_str))?;
 
-        run_test(program, input, result)?;
+        run_test(program, ctx, expected_result)?;
     }
     Ok(())
 }
@@ -65,7 +59,7 @@ fn merge_tests() -> Result<(), Box<dyn Error>> {
     let tests = suite::make_tests();
 
     for test in tests{
-        let TestCase {name, input, result, program: program_str} = test;
+        let TestCase {name, ctx: input, expected_result: result, program: program_str} = test;
         println!("Running integration test {name}");
         let program = optimize(parse(&lex(&program_str))?, vec![merge_in_program]);
 

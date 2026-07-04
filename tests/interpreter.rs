@@ -9,19 +9,13 @@ use brainfuck_compiler::error::InterpreterError;
 
 use crate::suite::{TestCase, TestContext};
 
-fn run_test(program: Vec<Instr>, input: Cursor<Vec<u8>>, result:  Option<Cursor<Vec<u8>>>) -> Result<(), InterpreterError> {
-    let mut test_ctx = TestContext {
-        input: input.into_inner(),
-        input_pos: 0,
-        output: vec![],
-    };
-
+fn run_test(program: Vec<Instr>, mut test_ctx: TestContext, result:  Option<Vec<u8>>) -> Result<(), InterpreterError> {
     let mut interpreter = Interpreter::new(&mut test_ctx);
 
     match result {
         Some(succesful_result) => {
             interpreter.exec(&program)?;
-            assert_eq!(test_ctx.output, succesful_result.into_inner());
+            assert_eq!(test_ctx.output, succesful_result);
             Ok(())
         }
         None => {
@@ -47,12 +41,12 @@ fn basic_tests() -> Result<(), InterpreterError> {
     let tests = suite::make_tests();
 
     for test in tests{
-        let TestCase {name, input, result, program: program_str} = test;
+        let TestCase {name, ctx, expected_result, program: program_str} = test;
         println!("Running integration test {name}");
         let program = parse(&lex(&program_str))?;
 
 
-        run_test(program, input, result)?;
+        run_test(program, ctx, expected_result)?;
     }
     Ok(())
 }
@@ -62,11 +56,11 @@ fn merge_tests() -> Result<(), InterpreterError> {
     let tests = suite::make_tests();
 
     for test in tests{
-        let TestCase {name, input, result, program: program_str} = test;
+        let TestCase {name, ctx, expected_result, program: program_str} = test;
         println!("Running integration test {name}");
         let program = optimize(parse(&lex(&program_str))?,  vec![merge_in_program]);
 
-        run_test(program, input, result)?;
+        run_test(program, ctx, expected_result)?;
     }
     Ok(())
 }

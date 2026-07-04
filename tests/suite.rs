@@ -1,28 +1,29 @@
-use std::io::{Cursor, Read, Write};
-
 use brainfuck_compiler::io::RuntimeIo;
 
-pub struct TestCase<R: Read, W: Write> {
+pub struct TestCase {
     pub name: String,
-    // Arbitrary or string for I/O?
-    pub input: R,
+    pub ctx: TestContext,
     // If test should fail then None
-
-    pub result: Option<W>,
+    pub expected_result: Option<Vec<u8>>,
     pub program: String    
 }
 
-impl<R: Read, W: Write> TestCase<R, W> {
-    fn new(name: String, program: String, input: R, result: Option<W>) -> Self {
-        Self { name, input, result, program }
+impl TestCase {
+    fn new(name: String, program: String, ctx: TestContext, expected_result: Option<Vec<u8>>) -> Self {
+        Self { name, ctx, expected_result, program }
     }
 }
-
 
 pub struct TestContext {
     pub input: Vec<u8>,
     pub input_pos: usize,
     pub output: Vec<u8>,
+}
+
+impl TestContext {
+    pub fn new(input: Vec<u8>) -> Self {
+        Self { input, input_pos: 0, output: vec![] }
+    }
 }
 
 impl RuntimeIo for TestContext {
@@ -42,60 +43,60 @@ impl RuntimeIo for TestContext {
 }
 
 // TODO: There must be a better solution than this....
-pub fn make_tests() -> Vec<TestCase<Cursor<Vec<u8>>, Cursor<Vec<u8>>>> {
+pub fn make_tests() -> Vec<TestCase> {
     vec![
         TestCase::new(
             "test_echo".to_string(),
             "+[,.]".to_string(), 
-            Cursor::new(b"abc".to_vec()), 
-            Some(Cursor::new(b"abc\0".to_vec()))),
+            TestContext::new(b"abc".to_vec()), 
+            Some(b"abc\0".to_vec())),
         TestCase::new(
             "test_1+1_print".to_string(), 
             "++.".to_string(),
-            Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(vec![2 as u8]))),  
+            TestContext::new(b"".to_vec()), 
+            Some(vec![2 as u8])),  
         TestCase::new(
             "test_1+1-1_print".to_string(), 
             "++-.".to_string(),
-            Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(vec![1 as u8]))),  
+            TestContext::new(b"".to_vec()), 
+            Some(vec![1 as u8])),  
         TestCase::new(
             "test_1+1-1_print".to_string(), 
             "++-.".to_string(),
-            Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(vec![1 as u8]))),  
+            TestContext::new(b"".to_vec()), 
+            Some(vec![1 as u8])),  
         TestCase::new(
             "test_shiftr".to_string(), 
             ">".to_string(),
-            Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(vec![]))),  
+            TestContext::new(b"".to_vec()), 
+            Some(vec![])),  
         TestCase::new(
             "test_shiftrl".to_string(), 
             "><".to_string(),
-            Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(vec![]))),        
+            TestContext::new(b"".to_vec()), 
+            Some(vec![])),        
         // Following examples courtesy of https://brainfuck.org/tests.b 
         TestCase::new(
             "test_double_io".to_string(),
             ">,>+++++++++,>+++++++++++[<++++++<++++++<+>>>-]<<.>.<<-.>.>.<<.".to_string(), 
-            Cursor::new(b"\n\0".to_vec()), 
-            Some(Cursor::new(b"LB\nLB\n".to_vec()))),
+            TestContext::new(b"\n\0".to_vec()), 
+            Some(b"LB\nLB\n".to_vec())),
         TestCase::new(
             "test_array_big_enough".to_string(),
             "++++[>++++++<-]>[>+++++>+++++++<<-]>>++++<[[>[[>>+<<-]<]>>>-]>-[>+>+<<-]>]
 // +++++[>+++++++<<++>-]>.<<.".to_string(), 
-            Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(b"#\n".to_vec()))),
+            TestContext::new(b"".to_vec()), 
+            Some(b"#\n".to_vec())),
         TestCase::new(
             "test_some_bs".to_string(),
             "[]++++++++++[>>+>+>++++++[<<+<+++>>>-]<<<<-]
 // [>>+<<]>[>>]<<<<[>++<[-]]>.>.".to_string(), 
-            Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(b"H\n".to_vec()))),        
+            TestContext::new(b"".to_vec()), 
+            (Some(b"H\n".to_vec()))),        
         TestCase::new(
             "test_lotoken".to_string(),
             "++[>++[>.+<-]<-]".to_string(), 
-            Cursor::new(b"".to_vec()), 
-            Some(Cursor::new(b"\0".to_vec()))),
+            TestContext::new(b"".to_vec()), 
+            (Some(b"\0".to_vec()))),
     ]
 }
