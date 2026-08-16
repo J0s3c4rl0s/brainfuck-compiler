@@ -1,7 +1,5 @@
-use std::io::Cursor;
 use std::error::Error;
 
-use brainfuck_compiler::io::IoContext;
 use brainfuck_compiler::optimizations::merge_operations::merge_in_program;
 use brainfuck_compiler::optimizations::optimize;
 use brainfuck_compiler::parser::{Instr, lex, parse};
@@ -14,16 +12,8 @@ use crate::suite::{TestCase, TestContext};
 fn run_test(program: Vec<Instr>, mut test_ctx: TestContext, expected_result:  Option<Vec<u8>>) -> Result<(), Box<dyn Error>> {
     let code = lower_program(&program)?;
 
-    let jit_program = compiler::JITProgram::new(code) ;
-
-    let mut io_ctx = IoContext {
-        io: Box::new(&mut test_ctx)
-    };
-
-    // This is so jank
-    let io_ctx_ptr = &mut io_ctx as *mut _  as *mut std::ffi::c_void;
-
-    let result_code = jit_program.run(io_ctx_ptr);
+    let jit_program = compiler::JITProgram::new(code, &mut test_ctx);
+    let result_code = jit_program.exec();
 
     match expected_result {
         Some(succesful_result) => {

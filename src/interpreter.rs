@@ -1,21 +1,22 @@
-
 use crate::io::RuntimeIo;
 use crate::parser::{Instr, Op};
 use crate::error::{InterpreterError, RuntimeError};
 
 type Result<T> = std::result::Result<T, InterpreterError>;
 
-pub struct Interpreter<'a, IO> where IO : RuntimeIo {
+pub struct Interpreter<'a, IO : RuntimeIo> {
     // IO
     io_ctx: &'a mut IO,
     // Memory
     cells : Vec<u8>,
     cell_pointer : usize,
+
+    pub program: Option<Vec<Instr>>,
 }
 
 impl<'a, IO> Interpreter<'a,IO> where IO : RuntimeIo {
     pub fn new(io_ctx: &'a mut IO) -> Self {
-        Self { io_ctx, cells: vec![0; 30000], cell_pointer: 0}
+        Self { io_ctx, cells: vec![0; 30000], cell_pointer: 0, program: None}
     }
 
     pub fn exec(&mut self, ops : &[Instr]) -> Result<()>{

@@ -44,7 +44,7 @@ impl RuntimeIo for TestContext {
 
 // TODO: There must be a better solution than this....
 pub fn make_tests() -> Vec<TestCase> {
-    vec![
+    return vec![
         TestCase::new(
             "test_echo".to_string(),
             "+[,.]".to_string(), 
@@ -92,11 +92,12 @@ pub fn make_tests() -> Vec<TestCase> {
             "[]++++++++++[>>+>+>++++++[<<+<+++>>>-]<<<<-]
 // [>>+<<]>[>>]<<<<[>++<[-]]>.>.".to_string(), 
             TestContext::new(b"".to_vec()), 
-            (Some(b"H\n".to_vec()))),        
+            Some(b"H\n".to_vec())),        
         TestCase::new(
             "test_lotoken".to_string(),
             "++[>++[>.+<-]<-]".to_string(), 
             TestContext::new(b"".to_vec()), 
-            (Some(b"\0".to_vec()))),
+            Some(b"\0".to_vec())),
     ]
 }
+

@@ -1,5 +1,4 @@
 mod suite;
-use std::io::Cursor;
 
 use brainfuck_compiler::interpreter::Interpreter;
 use brainfuck_compiler::optimizations::{optimize};

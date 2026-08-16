@@ -1,43 +1,127 @@
-use std::{fs, io::{Cursor, stdin, stdout}, os::raw::c_void};
+use std::{fs, io::Read, println, todo};
 
-use brainfuck_compiler::{compiler::{self, JITProgram, io::{stdin_read, stdout_write}}, interpreter, parser::{self, parse}};
-use clap::Parser;
+use brainfuck_compiler::{compiler::{JITProgram, lower_program}, interpreter::Interpreter, io::RuntimeIo, parser::{lex, parse}};
+use clap::{Parser, Subcommand};
 
 /// Program to interpret or JIT compile brainfuck files
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args {
-    /// Path to the brainfuck file from current root
-    file_path: String,
+struct Cli {
+    // Perhaps optimization level or a list of optimizations down the line? 
 
-    /// Use compiler, default is interpreter
+    /// Merge optimization 
     #[arg(short, long)]
-    compile: bool,
+    merge: bool,
+
+    #[command(subcommand)]
+    command: Commands,
 }
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    Compile {
+        /// Path to the brainfuck file from current root
+        file_path: String,
+
+        /// File to write to 
+        #[arg(short, long)]
+        output_file: String,
+    },
+
+    Run {
+        /// Path to the brainfuck file from current root
+        file_path: String,
+
+        /// Use compiler, default is interpreter
+        #[arg(short, long)]
+        compile: bool,
+    },
+
+    TestFolder {
+        path: String,
+
+        /// Use compiler, default is interpreter
+        #[arg(short, long)]
+        compile: bool,
+    }
+}
+
+struct IOStd;
+
+impl RuntimeIo for IOStd {
+    fn read(&mut self) -> Option<u8> {
+        let mut buf: [u8; 1] = [0];
+        match std::io::stdin().read_exact(&mut buf) {
+            Ok(_) => Some(buf[0]),
+            Err(err) => match err.kind() {
+                std::io::ErrorKind::UnexpectedEof => Some(0),
+                _ => None,
+            },
+        }
+    }
+
+    fn write(&mut self, byte: u8) {
+        println!("{byte}");
+    }
+}
+
+
 
 // Example: `bf run -i`
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
-    // println!("Reading from file ")
-    let source_program = fs::read_to_string(&args.file_path)?;
-    let program = parser::parse(&parser::lex(&source_program))?;
-    
-    if args.compile {
-        println!("Compiling and running program {}", &args.file_path);
+    match cli.command {
+        Commands::Compile { file_path: _, output_file: _ } => todo!("Implement compiling to an external file, probably figure out linker"),
+        // Commands::Compile { file_path, output_file, merge } => todo!(),
+        
+        Commands::Run { file_path, compile } => {
+            // println!("Reading from file ")
+            let source_program = fs::read_to_string(&file_path)?;
+            let parsed = parse(&lex(&source_program))?;
+            
+            // Feels a bit silly but alas
+            let mut io = IOStd{};
+            if compile {
+                JITProgram::new(
+                    lower_program(&parsed)?, 
+                    &mut io)
+                    .exec();
+                return Ok(());
 
-        let compiled_code = compiler::lower_program(&program, stdin_read, stdout_write)?;
-        let jit_exec = compiler::JITProgram::new(compiled_code);
-
-        // SAFETY: io_context argument is not used for stdin or stdout
-        jit_exec.run(0 as *mut c_void);
-    }
-    else {
-        println!("Interpreting program {}!", &args.file_path);
-        let mut interpreter = interpreter::Interpreter::new(stdin(), stdout());
-
-        interpreter.run(&program)?;
+            } else {
+                Interpreter::new(&mut io)
+                    .exec(&parsed)?
+            }
+        },
+        
+        /*
+        IDEA:
+            Give folder 
+            Read in folder all bf files
+            Some format for the input and the expected output
+            Loop over each of these triplets and run them
+            Receive options for optimizations  
+        */
+        Commands::TestFolder { path , compile: _compile } => {
+            let files = read_all_files(path);
+            for (filename, _input, _expected_output, _code) in files {
+                println!("Running testcase: {filename}");
+                
+                // setup_runner(compile)
+                //     .test(
+                //         &parse(&lex(&code))?, 
+                //         input, 
+                //         Some(expected_output))?;   
+            }
+        },
     }
 
     Ok(())
+}
+
+
+
+fn read_all_files(_path: String) -> Vec<(String, Vec<u8>, Vec<u8>, String)> {
+    todo!("include some logic for defining a negative test case, ie when to give a none instead of an expected output");
 }
