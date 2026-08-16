@@ -18,7 +18,14 @@ Simply run
 ### Example programs
 1. `test_echo.b` simply prints to stdout the bytes it reads from stdin, press `Ctrl + C` to quit the program
 
+### Running test suite 
+To run all tests 
 
+`cargo test`
+
+Running only one test file (e.g. `compiler` integration test file) 
+
+`cargo test --test compiler`
 ## Project details
 
 ### Interpreters
