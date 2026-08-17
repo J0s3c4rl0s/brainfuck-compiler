@@ -8,7 +8,7 @@ pub trait RuntimeIo {
 
 // Wrappers to pass to the compiler as pointers
 pub struct IoContext<'a> {
-    pub io: Box<&'a mut dyn RuntimeIo>,
+    pub io: &'a mut dyn RuntimeIo,
 }
 
 pub extern "C" fn bf_write(ctx: *mut c_void, byte: u8) -> i32 {

@@ -24,7 +24,7 @@ impl<'a, IO: RuntimeIo> JITProgram<'a, IO> {
         let buffer = buffer.make_exec().unwrap();
 
         let mut io_ctx = IoContext {
-            io: Box::new(self.io)
+            io: self.io
         };
 
         unsafe {
