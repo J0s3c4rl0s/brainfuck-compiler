@@ -1,4 +1,4 @@
-use std::{fs, io::Read, println, todo};
+use std::{fs, io::{Read, Write}, println, todo};
 
 use brainfuck_compiler::{compiler::{JITProgram, lower_program}, interpreter::Interpreter, io::RuntimeIo, parser::{lex, parse}};
 use clap::{Parser, Subcommand};
@@ -61,7 +61,7 @@ impl RuntimeIo for IOStd {
     }
 
     fn write(&mut self, byte: u8) {
-        println!("{byte}");
+        std::io::stdout().write(&[byte]).unwrap();
     }
 }
 

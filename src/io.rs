@@ -12,9 +12,7 @@ pub struct IoContext<'a> {
 }
 
 pub extern "C" fn bf_write(ctx: *mut c_void, byte: u8) -> i32 {
-    let ctx = unsafe {
-        &mut *(ctx as *mut IoContext)
-    };
+    let ctx = unsafe { &mut *(ctx as *mut IoContext) };
 
     ctx
         .io
@@ -23,9 +21,7 @@ pub extern "C" fn bf_write(ctx: *mut c_void, byte: u8) -> i32 {
 }
 
 pub extern "C" fn bf_read(ctx: *mut c_void) -> i32 {
-    let ctx = unsafe {
-        &mut *(ctx as *mut IoContext)
-    };
+    let ctx = unsafe { &mut *(ctx as *mut IoContext) };
 
     match ctx.io.read() {
         Some(b) => {

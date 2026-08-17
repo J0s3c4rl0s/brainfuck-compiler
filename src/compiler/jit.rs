@@ -35,13 +35,3 @@ impl<'a, IO: RuntimeIo> JITProgram<'a, IO> {
         }
     }
 }
-
-pub struct JITRunner<'a, IO : RuntimeIo> {
-    pub program: Option<JITProgram<'a, IO>>,
-}
-
-impl<'a, IO: RuntimeIo> JITRunner<'a, IO> {
-    pub fn new() -> Self {
-        Self { program: None }
-    }
-}
